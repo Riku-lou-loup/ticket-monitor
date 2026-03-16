@@ -22,5 +22,6 @@ jobs:
         env:
           GMAIL_USER:          ${{ secrets.GMAIL_USER }}
           GMAIL_APP_PASS:      ${{ secrets.GMAIL_APP_PASS }}
+          GMAIL_RECIPIENT:     ${{ secrets.GMAIL_RECIPIENT }}
           GH_PAT:              ${{ secrets.GH_PAT }}
           GITHUB_REPOSITORY:   ${{ github.repository }}   # auto-injected
