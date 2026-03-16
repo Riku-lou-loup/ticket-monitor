@@ -15,7 +15,7 @@ GITHUB_TOKEN = os.environ["GH_PAT"]
 GITHUB_REPO  = os.environ["GITHUB_REPOSITORY"]  # auto-set by Actions
 GMAIL_USER   = os.environ["GMAIL_USER"]
 GMAIL_PASS   = os.environ["GMAIL_APP_PASS"]
-
+GMAIL_RECIPIENT = os.environ["GMAIL_RECIPIENT"]
 def get_seats():
     r = requests.get(URL, headers={"User-Agent": "Mozilla/5.0"}, timeout=15)
     soup = BeautifulSoup(r.text, "html.parser")
@@ -58,7 +58,7 @@ def send_email(subject, body):
     msg = MIMEText(body)
     msg["Subject"] = subject
     msg["From"]    = GMAIL_USER
-    msg["To"]      = GMAIL_USER
+    msg["To"]      = GMAIL_RECIPIENT
     with smtplib.SMTP_SSL("smtp.gmail.com", 465) as smtp:
         smtp.login(GMAIL_USER, GMAIL_PASS)
         smtp.send_message(msg)
