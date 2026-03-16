@@ -18,7 +18,7 @@ jobs:
       - run: pip install requests beautifulsoup4
 
       - name: Check ticket availability
-        run: python mreso_monitor.py
+        run: python main.py
         env:
           GMAIL_USER:          ${{ secrets.GMAIL_USER }}
           GMAIL_APP_PASS:      ${{ secrets.GMAIL_APP_PASS }}
