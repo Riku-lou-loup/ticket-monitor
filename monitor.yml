@@ -1,0 +1,26 @@
+name: M réso ticket monitor
+
+on:
+  schedule:
+    - cron: '*/2 * * * *'   # every 2 min, 6am–8pm France time
+  workflow_dispatch:
+
+jobs:
+  check-tickets:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - run: pip install -r requirements.txt
+
+      - name: Check ticket availability
+        run: python mreso_monitor.py
+        env:
+          GMAIL_USER:          ${{ secrets.GMAIL_USER }}
+          GMAIL_APP_PASS:      ${{ secrets.GMAIL_APP_PASS }}
+          GH_PAT:              ${{ secrets.GH_PAT }}
+          GITHUB_REPOSITORY:   ${{ github.repository }}   # auto-injected
