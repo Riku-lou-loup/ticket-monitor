@@ -2,7 +2,7 @@ name: M réso ticket monitor
 
 on:
   schedule:
-    - cron: '*/2 * * * *'   # every 2 min, 6am–8pm France time
+    - cron: '*/2 5-19 * * *'
   workflow_dispatch:
 
 jobs:
@@ -15,7 +15,9 @@ jobs:
         with:
           python-version: '3.11'
 
-      - run: pip install requests beautifulsoup4
+      - run: pip install -r requirements.txt
+
+      - run: playwright install chromium --with-deps
 
       - name: Check ticket availability
         run: python main.py
@@ -24,4 +26,4 @@ jobs:
           GMAIL_APP_PASS:      ${{ secrets.GMAIL_APP_PASS }}
           GMAIL_RECIPIENT:     ${{ secrets.GMAIL_RECIPIENT }}
           GH_PAT:              ${{ secrets.GH_PAT }}
-          GITHUB_REPOSITORY:   ${{ github.repository }}   # auto-injected
+          GITHUB_REPOSITORY:   ${{ github.repository }}

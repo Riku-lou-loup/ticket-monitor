@@ -1,19 +1,59 @@
-import requests, os, re
+import requests, os, re, json, smtplib
 from bs4 import BeautifulSoup
 from email.mime.text import MIMEText
-import smtplib
+from datetime import date, datetime
 
-URL = (
-    "https://www.bus-et-clic.com/mreso/resultats?token=52f05913&type=1&ligne_id=15&corresp_start=GRG&corresp_end=PPO&depart_date=21%2F03%2F2026&depart_time=&retour_date=&retour_time=&passagers%5BPTF%5D=1&passagers%5BABO%5D=0"
-)
-
-GITHUB_TOKEN = os.environ["GH_PAT"]
-GITHUB_REPO  = os.environ["GITHUB_REPOSITORY"]  # auto-set by Actions
-GMAIL_USER   = os.environ["GMAIL_USER"]
-GMAIL_PASS   = os.environ["GMAIL_APP_PASS"]
+GMAIL_USER      = os.environ["GMAIL_USER"]
+GMAIL_PASS      = os.environ["GMAIL_APP_PASS"]
 GMAIL_RECIPIENT = os.environ["GMAIL_RECIPIENT"]
-def get_seats():
-    r = requests.get(URL, headers={"User-Agent": "Mozilla/5.0"}, timeout=15)
+GITHUB_TOKEN    = os.environ["GH_PAT"]
+GITHUB_REPO     = os.environ["GITHUB_REPOSITORY"]
+
+OPERATORS = {
+    "mreso": {
+        "type":  "1",
+        "base":  "https://www.bus-et-clic.com/mreso/resultats",
+        "extra": "",
+    },
+    "transaltitude": {
+        "type":  "2",
+        "base":  "https://www.bus-et-clic.com/transaltitude/resultats",
+        "extra": "&transaltitude_flags=1",
+    },
+}
+
+# ── Token ─────────────────────────────────────────────────────
+def fetch_token(operator):
+    urls = {
+        "mreso":         "https://www.bus-et-clic.com/mreso",
+        "transaltitude": "https://www.bus-et-clic.com/transaltitude",
+    }
+    r = requests.get(urls[operator], headers={"User-Agent": "Mozilla/5.0"}, timeout=15)
+    soup = BeautifulSoup(r.text, "html.parser")
+    token_input = soup.find("input", {"name": "token"})
+    if token_input:
+        return token_input.get("value")
+    match = re.search(r"token=([a-f0-9]+)", r.text)
+    if match:
+        return match.group(1)
+    return None
+
+# ── Scrapers ──────────────────────────────────────────────────
+def get_seats_busetchic(trip):
+    token = fetch_token(trip["operator"])
+    if not token:
+        print(f"  ❌ Could not fetch token for {trip['operator']}")
+        return None
+    op = OPERATORS[trip["operator"]]
+    date_encoded = datetime.strptime(trip["date"], "%Y-%m-%d").strftime("%d%%2F%m%%2F%Y")
+    url = (
+        f"{op['base']}?token={token}&type={op['type']}"
+        f"&corresp_start={trip['corresp_start']}&corresp_end={trip['corresp_end']}"
+        f"&depart_date={date_encoded}"
+        f"&depart_time=&retour_date={date_encoded}&retour_time="
+        f"&passagers%5BPTF%5D=1{op['extra']}"
+    )
+    r = requests.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=15)
     soup = BeautifulSoup(r.text, "html.parser")
     for li in soup.find_all("li"):
         text = li.get_text()
@@ -23,25 +63,75 @@ def get_seats():
                 return int(match.group())
     return None
 
-def get_stored_seats():
-    """Read previous seat count from a GitHub Actions variable."""
+def get_seats_billetweb(trip):
+    from playwright.sync_api import sync_playwright
+
+    url         = trip["url"]
+    target_date = trip["date"]
+    pickup      = trip.get("pickup")
+
+    dt = datetime.strptime(target_date, "%Y-%m-%d")
+    # Linux strftime supports %-d (no leading zero)
+    date_str = dt.strftime("%a %b %-d, %Y")  # "Sat Mar 21, 2026"
+
+    with sync_playwright() as p:
+        browser = p.chromium.launch(headless=True)
+        page = browser.new_page()
+        page.goto(url, wait_until="networkidle", timeout=30000)
+        page.wait_for_selector(".shop_step1_session_date", timeout=15000)
+        html = page.content()
+        browser.close()
+
+    soup = BeautifulSoup(html, "html.parser")
+
+    for date_span in soup.find_all("span", class_="shop_step1_session_date"):
+        if date_str in date_span.get_text():
+            parent = date_span.find_parent("div", class_="shop_step1_name")
+            if not parent:
+                continue
+
+            if pickup is None:
+                # Return total for the date
+                avail = parent.find("span", class_="shop_step1_session_availability")
+                if avail:
+                    match = re.search(r"\d+", avail.get_text())
+                    return int(match.group()) if match else 0
+            else:
+                # Return count for specific pickup point
+                for container in parent.find_all("span", class_="shop_step1_name_container"):
+                    name_span = container.find("span", class_="shop_step1_name_text")
+                    if name_span and pickup.lower() in name_span.get_text().lower():
+                        avail = container.find("div", class_="shop_step1_availability")
+                        if avail:
+                            text = avail.get_text().strip()
+                            if re.search(r"complet|sold.?out|épuisé", text, re.I):
+                                return 0
+                            match = re.search(r"\d+", text)
+                            return int(match.group()) if match else 0
+    return None
+
+def get_seats_for_trip(trip):
+    scraper = trip.get("scraper", "busetchic")
+    if scraper == "billetweb":
+        return get_seats_billetweb(trip)
+    else:
+        return get_seats_busetchic(trip)
+
+# ── GitHub variables (persist state between runs) ─────────────
+def get_stored(key):
     r = requests.get(
-        f"https://api.github.com/repos/{GITHUB_REPO}/actions/variables/LAST_SEATS",
+        f"https://api.github.com/repos/{GITHUB_REPO}/actions/variables/{key}",
         headers={"Authorization": f"Bearer {GITHUB_TOKEN}",
                  "Accept": "application/vnd.github+json"}
     )
-    if r.status_code == 200:
-        return int(r.json()["value"])
-    return None  # variable doesn't exist yet
+    return r.json().get("value") if r.status_code == 200 else None
 
-def store_seats(count):
-    """Write current seat count to a GitHub Actions variable."""
+def store(key, value):
     headers = {"Authorization": f"Bearer {GITHUB_TOKEN}",
                "Accept": "application/vnd.github+json"}
-    data = {"name": "LAST_SEATS", "value": str(count)}
-    # Try update first, then create if it doesn't exist
+    data = {"name": key, "value": str(value)}
     r = requests.patch(
-        f"https://api.github.com/repos/{GITHUB_REPO}/actions/variables/LAST_SEATS",
+        f"https://api.github.com/repos/{GITHUB_REPO}/actions/variables/{key}",
         headers=headers, json=data
     )
     if r.status_code == 404:
@@ -50,6 +140,7 @@ def store_seats(count):
             headers=headers, json=data
         )
 
+# ── Email ─────────────────────────────────────────────────────
 def send_email(subject, body):
     msg = MIMEText(body)
     msg["Subject"] = subject
@@ -59,36 +150,52 @@ def send_email(subject, body):
         smtp.login(GMAIL_USER, GMAIL_PASS)
         smtp.send_message(msg)
 
+def safe_key(name):
+    return "SEATS_" + re.sub(r"[^A-Z0-9]", "_", name.upper())
+
 # ── Main ──────────────────────────────────────────────────────
-current = get_seats()
-previous = get_stored_seats()
+with open("config.json") as f:
+    config = json.load(f)
 
-print(f"Current: {current} seats | Previous: {previous} seats")
+today = date.today()
 
-if current is None:
-    print("No trip found or sold out.")
-    if previous is not None and previous > 0:
+for trip in config["trips"]:
+    name      = trip["name"]
+    trip_date = date.fromisoformat(trip["date"])
+
+    if trip_date < today:
+        print(f"[{name}] Date passed — skipping.")
+        continue
+
+    key      = safe_key(name)
+    current  = get_seats_for_trip(trip)
+    previous = get_stored(key)
+    previous = int(previous) if previous is not None else None
+
+    print(f"[{name}] Current: {current} | Previous: {previous}")
+
+    if current is None:
+        print(f"[{name}] No seats found or scrape failed.")
+        if previous and previous > 0:
+            send_email(
+                f"🚌 {name} — Plus de places !",
+                f"Plus aucune place disponible.\n\nRéserver : {trip.get('url', '')}"
+            )
+            store(key, 0)
+
+    elif previous is None or current != previous:
+        diff     = current - (previous or 0)
+        diff_str = f"+{diff}" if diff > 0 else str(diff)
+        book_url = trip.get("url", "")
         send_email(
-            "🚌 M réso — Plus de places disponibles !",
-            f"Le trajet GRENOBLE → PRAPOUTEL n'a plus de places.\n\n{URL}"
+            f"🚌 {name} — {current} places ({diff_str})",
+            f"Changement détecté !\n\n"
+            f"Avant     : {previous} place(s)\n"
+            f"Maintenant: {current} place(s)\n\n"
+            f"Réserver maintenant :\n{book_url}"
         )
-    store_seats(0)
+        print(f"[{name}] Change detected — email sent.")
+        store(key, current)
 
-elif previous is None or current != previous:
-    # Something changed — notify
-    if previous is None:
-        msg = f"Première vérification : {current} place(s) disponible(s)."
-    elif current < previous:
-        msg = f"Les places diminuent : {previous} → {current} place(s) disponible(s) !"
     else:
-        msg = f"Les places augmentent : {previous} → {current} place(s) disponible(s)."
-
-    send_email(
-        f"🚌 M réso — {current} places ({'+' if current > (previous or 0) else ''}{current - (previous or 0)})",
-        f"{msg}\n\nRéserver maintenant :\n{URL}"
-    )
-    print(f"Change detected — email sent: {msg}")
-    store_seats(current)
-
-else:
-    print(f"No change ({current} seats). No email sent.")
+        print(f"[{name}] No change ({current} seats).")

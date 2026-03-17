@@ -1,9 +1,14 @@
 {
-  "trips": [
-    {
-      "name": "Grenoble → Prapoutel",
-      "url": "https://www.bus-et-clic.com/mreso/resultats?token=52f05913&type=1&ligne_id=15&corresp_start=GRG&corresp_end=PPO&depart_date=19%2F03%2F2026&passagers%5BPTF%5D=1&passagers%5BABO%5D=0",
-      "date": "2026-03-19"
-    }
-  ]
+  "name": "U-Glisse → Les 2 Alpes (Verdun)",
+  "scraper": "billetweb",
+  "url": "https://www.billetweb.fr/transports-samedi-janv-a-avril-2026",
+  "date": "2026-03-21",
+  "pickup": "Verdun"
+},
+{
+  "name": "U-Glisse → Les 2 Alpes (Campus)",
+  "scraper": "billetweb",
+  "url": "https://www.billetweb.fr/transports-samedi-janv-a-avril-2026",
+  "date": "2026-03-21",
+  "pickup": "Campus"
 }
