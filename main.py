@@ -64,7 +64,7 @@ def get_seats_busetchic(trip):
     return None
 
 def get_seats_billetweb(trip):
-    from playwright.sync_api import sync_playwright
+    from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeout
 
     url         = trip["url"]
     target_date = trip["date"]
@@ -75,10 +75,25 @@ def get_seats_billetweb(trip):
     date_str = dt.strftime("%a %b %-d, %Y")  # "Sat Mar 21, 2026"
 
     with sync_playwright() as p:
-        browser = p.chromium.launch(headless=True)
-        page = browser.new_page()
-        page.goto(url, wait_until="networkidle", timeout=30000)
-        page.wait_for_selector(".shop_step1_session_date", timeout=15000)
+        browser = p.chromium.launch(
+            headless=True,
+            args=["--no-sandbox", "--disable-setuid-sandbox", "--disable-dev-shm-usage"],
+        )
+        context = browser.new_context(
+            user_agent=(
+                "Mozilla/5.0 (X11; Linux x86_64) "
+                "AppleWebKit/537.36 (KHTML, like Gecko) "
+                "Chrome/122.0.0.0 Safari/537.36"
+            )
+        )
+        page = context.new_page()
+        page.goto(url, wait_until="domcontentloaded", timeout=30000)
+        try:
+            page.wait_for_selector(".shop_step1_session_date", timeout=20000)
+        except PlaywrightTimeout:
+            print(f"  ⚠️  Selector not found — page snippet:\n{page.content()[:2000]}")
+            browser.close()
+            return None
         html = page.content()
         browser.close()
 
