@@ -37,76 +37,75 @@ def find_stop_code(query):
 
 # ── Step 2: parse the natural language query ──────────────────
 def parse_query(query):
-    """
-    Extract from/to/date from a natural language string.
-    Handles patterns like:
-      'Grenoble to Les Deux Alpes on March 26'
-      'Grenoble → Chamrousse le 28 mars'
-      'GRG to LDA 2026-03-26'
-    """
     query = query.strip()
 
-    # Extract date — try various formats
-    date = None
-    date_patterns = [
-        (r"(\d{4}-\d{2}-\d{2})", "%Y-%m-%d"),
-        (r"(\d{2}/\d{2}/\d{4})", "%d/%m/%Y"),
-        (r"(\d{1,2}\s+\w+\s+\d{4})", "%d %B %Y"),
-    ]
+    # Normalize French month names to English
     months_fr = {
         "janvier":"january","février":"february","mars":"march",
         "avril":"april","mai":"may","juin":"june","juillet":"july",
         "août":"august","septembre":"september","octobre":"october",
         "novembre":"november","décembre":"december"
     }
-
-    # Normalize French month names to English
     q_normalized = query.lower()
     for fr, en in months_fr.items():
         q_normalized = q_normalized.replace(fr, en)
 
-    # Try to find a date
-    month_names = "january|february|march|april|may|june|july|august|september|october|november|december"
-    match = re.search(rf"(\d{{1,2}})\s+({month_names})", q_normalized, re.I)
-    if match:
-        day   = match.group(1)
-        month = match.group(2)
-        date  = datetime.strptime(f"{day} {month} 2026", "%d %B %Y").strftime("%Y-%m-%d")
+    # Extract date — look for "on March 21", "le 21 mars", "2026-03-21"
+    date = None
 
+    # ISO format
+    match = re.search(r"(\d{4}-\d{2}-\d{2})", q_normalized)
+    if match:
+        date = match.group(1)
+
+    # "on Month DD" or "Month DD"
     if not date:
-        for pattern, fmt in date_patterns:
-            match = re.search(pattern, query)
-            if match:
-                try:
-                    date = datetime.strptime(match.group(1), fmt).strftime("%Y-%m-%d")
-                    break
-                except:
-                    pass
+        month_names = "january|february|march|april|may|june|july|august|september|october|november|december"
+        match = re.search(rf"(?:on\s+)?({month_names})\s+(\d{{1,2}})", q_normalized, re.I)
+        if match:
+            month = match.group(1)
+            day   = match.group(2)
+            date  = datetime.strptime(f"{day} {month} 2026", "%d %B %Y").strftime("%Y-%m-%d")
+
+    # "DD Month" or "le DD Month"
+    if not date:
+        month_names = "january|february|march|april|may|june|july|august|september|october|november|december"
+        match = re.search(rf"(?:le\s+)?(\d{{1,2}})\s+({month_names})", q_normalized, re.I)
+        if match:
+            day   = match.group(1)
+            month = match.group(2)
+            date  = datetime.strptime(f"{day} {month} 2026", "%d %B %Y").strftime("%Y-%m-%d")
 
     if not date:
         print("❌ Could not find a date in your query.")
-        print("   Try: 'Grenoble to Les Deux Alpes on March 26'")
+        print("   Try: 'Grenoble to Prapoutel on March 21'")
         exit(1)
 
-    # Remove date from query to help find from/to
-    query_clean = re.sub(
-        r"(\d{4}-\d{2}-\d{2}|\d{2}/\d{2}/\d{4}|\d{1,2}\s+\w+(\s+\d{4})?|on\s+\w+\s+\d+|le\s+\d+\s+\w+)",
-        "", query, flags=re.I
-    ).strip()
+    # Remove the date portion from query before splitting from/to
+    date_pattern = (
+        r"(?:on\s+)?"
+        r"(?:\d{4}-\d{2}-\d{2}"
+        r"|\d{2}/\d{2}/\d{4}"
+        r"|(?:january|february|march|april|may|june|july|august"
+        r"|september|october|november|december)\s+\d{1,2}"
+        r"|\d{1,2}\s+(?:january|february|march|april|may|june|july|august"
+        r"|september|october|november|december)"
+        r"|le\s+\d{1,2}\s+\w+)"
+    )
+    query_clean = re.sub(date_pattern, "", q_normalized, flags=re.I).strip()
 
     # Split on "to", "→", "->", "vers", "pour"
-    separators = r"\bto\b|\bvers\b|\bpour\b|→|->"
-    parts = re.split(separators, query_clean, maxsplit=1, flags=re.I)
+    parts = re.split(r"\bto\b|\bvers\b|\bpour\b|→|->", query_clean, maxsplit=1, flags=re.I)
 
     if len(parts) < 2:
         print("❌ Could not find departure and destination.")
-        print("   Try: 'Grenoble to Les Deux Alpes on March 26'")
+        print("   Try: 'Grenoble to Prapoutel on March 21'")
         exit(1)
 
     from_query = parts[0].strip()
     to_query   = parts[1].strip()
 
-    return from_query, to_query, date
+    return from_query, to_query, dates
 
 # ── Step 3: build and verify URL ─────────────────────────────
 def build_url(from_code, to_code, date_iso):
