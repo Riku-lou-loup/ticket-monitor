@@ -105,7 +105,7 @@ def parse_query(query):
     from_query = parts[0].strip()
     to_query   = parts[1].strip()
 
-    return from_query, to_query, dates
+    return from_query, to_query, date
 
 # ── Step 3: build and verify URL ─────────────────────────────
 def build_url(from_code, to_code, date_iso):
