@@ -87,9 +87,13 @@ def get_seats_billetweb(trip):
             )
         )
         page = context.new_page()
-        page.goto(url, wait_until="domcontentloaded", timeout=30000)
+        page.goto(url, wait_until="load", timeout=60000)
         try:
-            page.wait_for_selector(".shop_step1_session_date", timeout=20000)
+            page.wait_for_load_state("networkidle", timeout=30000)
+        except PlaywrightTimeout:
+            pass  # networkidle may never fire; continue and try the selector anyway
+        try:
+            page.wait_for_selector(".shop_step1_session_date", timeout=30000)
         except PlaywrightTimeout:
             print(f"  ⚠️  Selector not found — page snippet:\n{page.content()[:2000]}")
             browser.close()
