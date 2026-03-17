@@ -4,11 +4,7 @@ from email.mime.text import MIMEText
 import smtplib
 
 URL = (
-    "https://www.bus-et-clic.com/mreso/resultats"
-    "?token=52f05913&type=1&ligne_id=15"
-    "&corresp_start=GRG&corresp_end=PPO"
-    "&depart_date=21%2F03%2F2026"
-    "&passagers%5BPTF%5D=1&passagers%5BABO%5D=0"
+    "https://www.bus-et-clic.com/mreso/resultats?token=52f05913&type=1&ligne_id=15&corresp_start=GRG&corresp_end=PPO&depart_date=21%2F03%2F2026&depart_time=&retour_date=&retour_time=&passagers%5BPTF%5D=1&passagers%5BABO%5D=0"
 )
 
 GITHUB_TOKEN = os.environ["GH_PAT"]
