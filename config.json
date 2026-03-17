@@ -1,14 +1,32 @@
 {
-  "name": "U-Glisse → Les 2 Alpes (Verdun)",
-  "scraper": "billetweb",
-  "url": "https://www.billetweb.fr/transports-samedi-janv-a-avril-2026",
-  "date": "2026-03-21",
-  "pickup": "Verdun"
-},
-{
-  "name": "U-Glisse → Les 2 Alpes (Campus)",
-  "scraper": "billetweb",
-  "url": "https://www.billetweb.fr/transports-samedi-janv-a-avril-2026",
-  "date": "2026-03-21",
-  "pickup": "Campus"
+  "trips": [
+    {
+      "name": "Transaltitude → Les 2 Alpes",
+      "corresp_start": "GRG",
+      "corresp_end": "DAT",
+      "operator": "transaltitude",
+      "date": "2026-03-21"
+    },
+    {
+      "name": "U-Glisse → Les 2 Alpes (Verdun)",
+      "scraper": "billetweb",
+      "url": "https://www.billetweb.fr/transports-samedi-janv-a-avril-2026",
+      "date": "2026-03-21",
+      "pickup": "Verdun"
+    },
+    {
+      "name": "U-Glisse → Les 2 Alpes (Campus)",
+      "scraper": "billetweb",
+      "url": "https://www.billetweb.fr/transports-samedi-janv-a-avril-2026",
+      "date": "2026-03-21",
+      "pickup": "Campus"
+    },
+    {
+      "name": "M réso → 7 Laux",
+      "corresp_start": "GRG",
+      "corresp_end": "SLX",
+      "operator": "mreso",
+      "date": "2026-03-21"
+    }
+  ]
 }
