@@ -1,0 +1,35 @@
+name: Add trip
+
+on:
+  workflow_dispatch:
+    inputs:
+      trip_query:
+        description: 'Describe your trip (e.g. Grenoble to Les Deux Alpes on March 26)'
+        required: true
+
+jobs:
+  add-trip:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - run: pip install requests beautifulsoup4
+
+      - name: Find trip and add to config
+        run: python add_trip.py
+        env:
+          TRIP_QUERY:        ${{ inputs.trip_query }}
+          GH_PAT:            ${{ secrets.GH_PAT }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+
+      - name: Commit updated config
+        run: |
+          git config user.name "github-actions"
+          git config user.email "actions@github.com"
+          git add config.json
+          git diff --staged --quiet || git commit -m "add trip: ${{ inputs.trip_query }}"
+          git push
